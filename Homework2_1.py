@@ -74,7 +74,7 @@ class TextToImageClassifier(nn.Module):
         if premises and hypotheses:
             self.generate_images_if_needed(premises, hypotheses)
             self.preload_images(premises, hypotheses)
-            tqdm.write(f"Preloaded {len(self.image_cache)} images into memory.")
+            tqdm.write(f"Preloaded {len(self.image_cache)} images into memory. : TextToImageClassifier")
 
         # BERT tokenizer & 모델
         self.tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
@@ -154,9 +154,9 @@ class TextToImageClassifier(nn.Module):
         save_path = "text_classifier.pt"
         if os.path.exists(save_path):
             self.load_state_dict(torch.load(save_path, map_location="cuda"))
-            tqdm.write(f"가중치 로드 완료: {save_path}")
+            tqdm.write(f"가중치 로드 완료: {save_path} : TextToImageClassifier")
         else:
-            tqdm.write(f"저장된 가중치가 없어 처음부터 학습합니다.")
+            tqdm.write(f"저장된 가중치가 없어 처음부터 학습합니다. : TextToImageClassifier")
 
     # 이미지 파일 경로 반환
     def prompt_to_image_filename(self, premise, hypothesis):
@@ -182,7 +182,7 @@ class TextToImageClassifier(nn.Module):
             if os.path.exists(path):
                 self.image_cache[path] = self.load_image(path)
 
-    def generate_images_if_needed(self, premises, hypotheses, batch_size=8):
+    def generate_images_if_needed(self, premises, hypotheses):
         need_generate = []
         for prem, hypo in zip(premises, hypotheses):
             path = self.prompt_to_image_filename(prem, hypo)
@@ -192,20 +192,18 @@ class TextToImageClassifier(nn.Module):
         if not need_generate:
             return
 
-        for i in range(0, len(need_generate), batch_size):
-            batch = need_generate[i:i + batch_size]
-            p_prompts = [p for p, _ in batch]
-            h_prompts = [h for _, h in batch]
+        p_prompts = [p for p, _ in need_generate]
+        h_prompts = [h for _, h in need_generate]
 
-            with torch.no_grad():
-                p_imgs = self.pipe(p_prompts, num_inference_steps=10, progress_bar=False).images
-                h_imgs = self.pipe(h_prompts, num_inference_steps=10, progress_bar=False).images
+        with torch.no_grad():
+            p_imgs = self.pipe(p_prompts, num_inference_steps=10, progress_bar=False).images
+            h_imgs = self.pipe(h_prompts, num_inference_steps=10, progress_bar=False).images
 
-            for (prem, hypo), p_img, h_img in zip(batch, p_imgs, h_imgs):
-                combined = Image.new("RGB", (p_img.width + h_img.width, p_img.height))
-                combined.paste(p_img, (0, 0))
-                combined.paste(h_img, (p_img.width, 0))
-                combined.save(self.prompt_to_image_filename(prem, hypo))
+        for (prem, hypo), p_img, h_img in zip(need_generate, p_imgs, h_imgs):
+            combined = Image.new("RGB", (p_img.width + h_img.width, p_img.height))
+            combined.paste(p_img, (0, 0))
+            combined.paste(h_img, (p_img.width, 0))
+            combined.save(self.prompt_to_image_filename(prem, hypo))
 
     def forward(self, sentence_pairs):
         images, texts = [], []
@@ -216,7 +214,7 @@ class TextToImageClassifier(nn.Module):
 
         # 1. 이미지 경로 생성 및 이미지 필요 시 생성
         img_paths = [self.prompt_to_image_filename(p, h) for p, h in sentence_pairs]
-        self.generate_images_if_needed(premises, hypotheses)
+        self.generate_images_if_needed(premises, hypotheses, )
 
         # 2. 이미지 로드 및 텍스트 인코딩
         for (premise, hypothesis), img_path in zip(sentence_pairs, img_paths):
