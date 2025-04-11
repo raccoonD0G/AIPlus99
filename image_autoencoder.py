@@ -136,25 +136,21 @@ class Autoencoder(nn.Module):
         )
 
         self.decoder = nn.Sequential(
-            # 1. Linear projection to reshape into (128, 28, 28)
             nn.Linear(768, 128 * 28 * 28),
             nn.LayerNorm(128 * 28 * 28),
             nn.LeakyReLU(0.1),
             nn.Unflatten(1, (128, 28, 28)),
 
-            # 2. Upsample to (64, 56, 56)
             nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
             nn.Conv2d(128, 64, kernel_size=3, padding=1),
             nn.BatchNorm2d(64),
             nn.LeakyReLU(0.1),
 
-            # 3. Upsample to (32, 112, 112)
             nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
             nn.Conv2d(64, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
             nn.LeakyReLU(0.1),
 
-            # 4. Upsample to (3, 224, 224)
             nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
             nn.Conv2d(32, 3, kernel_size=3, padding=1),
             nn.Sigmoid()
@@ -167,7 +163,6 @@ class Autoencoder(nn.Module):
         out = self.decoder(z)
         return out, z
 
-# Dataset for loading images from folder
 class ImageFolderDataset(Dataset):
     def __init__(self, folder, transform=None):
         self.paths = [os.path.join(folder, fname) for fname in os.listdir(folder) if fname.endswith('.png')]
@@ -180,9 +175,9 @@ class ImageFolderDataset(Dataset):
         image = Image.open(self.paths[idx]).convert("RGB")
         if self.transform:
             image = self.transform(image)
-        return image, image  # target is same as input for Autoencoder
+        return image, image
 
-# Image transform
+
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor()
@@ -211,7 +206,6 @@ if __name__ == "__main__":
             total_loss += loss.item()
         tqdm.write(f"Epoch {epoch+1} Loss: {total_loss:.4f}")
 
-    # Save encoder and projector separately
     os.makedirs("trained_image_autoencoder", exist_ok=True)
     torch.save(model.encoder.state_dict(), "trained_image_autoencoder/encoder.pt")
     torch.save(model.projector.state_dict(), "trained_image_autoencoder/projector.pt")
