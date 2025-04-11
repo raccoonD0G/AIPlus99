@@ -182,7 +182,7 @@ class TextToImageClassifier(nn.Module):
             if os.path.exists(path):
                 self.image_cache[path] = self.load_image(path)
 
-    def generate_images_if_needed(self, premises, hypotheses):
+    def generate_images_if_needed(self, premises, hypotheses, batch_size=8):
         need_generate = []
         for prem, hypo in zip(premises, hypotheses):
             path = self.prompt_to_image_filename(prem, hypo)
@@ -192,18 +192,20 @@ class TextToImageClassifier(nn.Module):
         if not need_generate:
             return
 
-        p_prompts = [p for p, _ in need_generate]
-        h_prompts = [h for _, h in need_generate]
+        for i in range(0, len(need_generate), batch_size):
+            batch = need_generate[i:i + batch_size]
+            p_prompts = [p for p, _ in batch]
+            h_prompts = [h for _, h in batch]
 
-        with torch.no_grad():
-            p_imgs = self.pipe(p_prompts, num_inference_steps=10, progress_bar=True).images
-            h_imgs = self.pipe(h_prompts, num_inference_steps=10, progress_bar=True).images
+            with torch.no_grad():
+                p_imgs = self.pipe(p_prompts, num_inference_steps=10, progress_bar=False).images
+                h_imgs = self.pipe(h_prompts, num_inference_steps=10, progress_bar=False).images
 
-        for (prem, hypo), p_img, h_img in zip(need_generate, p_imgs, h_imgs):
-            combined = Image.new("RGB", (p_img.width + h_img.width, p_img.height))
-            combined.paste(p_img, (0, 0))
-            combined.paste(h_img, (p_img.width, 0))
-            combined.save(self.prompt_to_image_filename(prem, hypo))
+            for (prem, hypo), p_img, h_img in zip(batch, p_imgs, h_imgs):
+                combined = Image.new("RGB", (p_img.width + h_img.width, p_img.height))
+                combined.paste(p_img, (0, 0))
+                combined.paste(h_img, (p_img.width, 0))
+                combined.save(self.prompt_to_image_filename(prem, hypo))
 
     def forward(self, sentence_pairs):
         images, texts = [], []
