@@ -210,7 +210,7 @@ class MCQDataset(Dataset):
     def __getitem__(self, idx):
         q = self.questions[idx]
         question_text = q["question"]
-        paragraph_text = q["paragraph"]
+        paragraph_text = q["paragraph"]  # 지문도 함께 사용
         label_idx = q["answer"]
 
         # 질문 인코딩
@@ -231,6 +231,7 @@ class MCQDataset(Dataset):
             return_tensors="pt"
         )
 
+        # 레이블 (one-hot)
         one_hot = torch.zeros(5)
         one_hot[label_idx] = 1
 
@@ -248,7 +249,7 @@ from transformers import TrainingArguments, Trainer
 train_questions = []
 test_questions = []
 
-for i in range(1, 2):
+for i in range(1, 3):
     exam_file = f"Exam{i}.pdf"
     answer_file = f"Answer{i}.pdf"
 
@@ -270,7 +271,7 @@ print(f"테스트용 문제 수: {len(test_questions)}")
 tokenizer = AutoTokenizer.from_pretrained("klue/bert-base")
 tokenizer.model_max_length = 512
 
-for i in range(1, 2):
+for i in range(1, 3):
     exam_file = f"Exam{i}.pdf"
     answer_file = f"Answer{i}.pdf"
 
@@ -489,7 +490,7 @@ def highlight_words_with_cross_attention(question_text, paragraph_text, model, t
 
 from nltk.tokenize import sent_tokenize
 
-def chunk_paragraph_by_sentences(paragraph, max_chunk_chars=1000):
+def chunk_paragraph_by_sentences(paragraph, max_chunk_chars=200):
     sentences = sent_tokenize(paragraph)
     chunks = []
     current = ""
@@ -533,7 +534,7 @@ def ask_gpt_with_chunked_summary_and_fewshot(problem, few_shot_pool, max_fewshot
             if i == 0:
                 prompt = f"""
     아래 문단은 중요한 단어가 *강조*되어 있습니다.
-    이 정보를 반영하여 핵심 내용을 간결하게 요약해 주세요. 중요한 정보는 생략하지 마세요. 장황하게 요약해도 괜찮습니다. :
+    이 정보를 반영하여 핵심 내용을 간결하게 요약해 주세요. 중요한 정보는 생략하지 마세요.:
 
     [문단 {i+1}]
     {highlighted}
@@ -544,18 +545,19 @@ def ask_gpt_with_chunked_summary_and_fewshot(problem, few_shot_pool, max_fewshot
     {context_summary}
 
     아래 문단은 중요한 단어가 *강조*되어 있습니다.
-    이 정보를 반영하여 기존 요약을 보완하거나 통합한 요약을 작성해 주세요:
+    이 정보를 반영하여 이전까지의 요약을 보완하거나 통합한 요약을 작성해 주세요. 이전까지의 요약 내용이 가능한 보존되어야 합니다.:
 
     [문단 {i+1}]
     {highlighted}
     """
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
                 max_tokens=4096,
             )
             context_summary = response.choices[0].message.content.strip()
+            print(f"메시지1 : {prompt}")
             print(f"[요약 {i+1}] {context_summary}")
 
         except Exception as e:
@@ -594,13 +596,14 @@ def ask_gpt_with_chunked_summary_and_fewshot(problem, few_shot_pool, max_fewshot
 
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[{"role": "user", "content": final_prompt}],
             temperature=0,
             max_tokens=5,
         )
         result = response.choices[0].message.content.strip()
         match = re.search(r"\b([1-5])\b", result)
+        print(f"메시지2 : {final_prompt}")
         print(f"\nGPT 최종 선택: {result}")
         return int(match.group(1)) if match else -1
     except Exception as e:
