@@ -31,7 +31,7 @@ prompt = PromptTemplate.from_template("""
 {question}
 """)
 
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3)
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.9)
 
 rag_chain = (
     {

@@ -43,7 +43,7 @@ def run_gemma(prompt_obj) -> str:
     if "<|assistant|>" in decoded:
         decoded = decoded.split("<|assistant|>")[-1]
 
-    return decoded.strip().strip("'").strip('"').lstrip("\n")
+    return decoded.strip().lstrip("\\n").strip("'").strip('"')
 
 
 rag_chain = (
@@ -56,6 +56,6 @@ rag_chain = (
 )
 
 user_msg = "GPT-4o는 언제 출시됐고 어떤 점이 좋아졌어?"
-result = rag_chain.invoke(user_msg)
-print("Gemma 응답:\n" + result)
+print("Gemma 응답:")
+print(rag_chain.invoke(user_msg))
 
