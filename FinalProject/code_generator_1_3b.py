@@ -243,7 +243,7 @@ Your Answer:
         self.model.train()
         return self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels, use_cache=False)
 
-    def sample_code_batch_with_partial_grad_caching(self, prompts: list[str], temperature=0.3, top_p=0.85, repetition_penalty=1.0, max_track_tokens=32):
+    def sample_code_batch_with_partial_grad_caching(self, prompts: list[str], temperature=0.3, top_p=0.85, repetition_penalty=1.03, max_track_tokens=32):
         self.model.train()
 
         inputs = self.tokenizer(
@@ -463,7 +463,7 @@ Your Answer:
                 do_sample=True,
                 temperature=0.3,
                 top_p=0.85,
-                repetition_penalty=1.0,
+                repetition_penalty=1.03,
                 return_dict_in_generate=True
             )
 
@@ -482,7 +482,7 @@ Your Answer:
                 do_sample=True,
                 temperature=0.3,
                 top_p=0.85,
-                repetition_penalty=1.0,
+                repetition_penalty=1.03,
                 return_dict_in_generate=True
             )
 
