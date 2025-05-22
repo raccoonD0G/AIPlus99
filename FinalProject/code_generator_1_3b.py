@@ -9,6 +9,7 @@ from value_head import ValueHead
 from transformers import LogitsProcessorList, RepetitionPenaltyLogitsProcessor, TopPLogitsWarper
 import torch.nn.functional as F
 import gc
+import re
 
 def get_quant_config(quantization: str | None):
     if quantization == "4bit":
@@ -444,27 +445,71 @@ Your Answer:
         if isinstance(prompts, str):
             prompts = [prompts]
 
-        with torch.no_grad():
-            h_result = self.sample_header_with_partial_grad(prompts, 0)
-            cpp_result = self.sample_cpp_with_partial_grad(prompts, h_result["header_texts"], 0)
+        def extract_or_wrap_cpp_block(text: str) -> str:
+            match = re.search(r"(```cpp\s*.*?\s*```)", text, re.DOTALL)
+            if match:
+                return match.group(1).strip()
+            else:
+                return text.strip()
 
+        # === HEADER ===
+        header_prompts = [self.create_short_prompt_header(req) for req in prompts]
+        header_inputs = self.tokenizer(header_prompts, return_tensors="pt", padding=True, truncation=True, max_length=self.max_length).to(self.device)
+
+        with torch.no_grad():
+            header_outputs = self.model.generate(
+                **header_inputs,
+                max_new_tokens=self.max_new_tokens,
+                do_sample=True,
+                temperature=0.3,
+                top_p=0.85,
+                repetition_penalty=1.0,
+                return_dict_in_generate=True
+            )
+
+        gen_start = header_inputs["input_ids"].shape[1]
+        raw_header_texts = [self.tokenizer.decode(seq[gen_start:], skip_special_tokens=True) for seq in header_outputs.sequences]
+        header_texts = [extract_or_wrap_cpp_block(text) for text in raw_header_texts]
+
+        # === CPP ===
+        cpp_prompts = [self.create_short_prompt_cpp(req, hdr) for req, hdr in zip(prompts, header_texts)]
+        cpp_inputs = self.tokenizer(cpp_prompts, return_tensors="pt", padding=True, truncation=True, max_length=self.max_length).to(self.device)
+
+        with torch.no_grad():
+            cpp_outputs = self.model.generate(
+                **cpp_inputs,
+                max_new_tokens=self.max_new_tokens,
+                do_sample=True,
+                temperature=0.3,
+                top_p=0.85,
+                repetition_penalty=1.0,
+                return_dict_in_generate=True
+            )
+
+        gen_start = cpp_inputs["input_ids"].shape[1]
+        raw_cpp_texts = [self.tokenizer.decode(seq[gen_start:], skip_special_tokens=True) for seq in cpp_outputs.sequences]
+        cpp_texts = [extract_or_wrap_cpp_block(text) for text in raw_cpp_texts]
+
+        # === 결과 정리 ===
         if return_text:
-            return [
-                h + "\n" + cpp
-                for h, cpp in zip(h_result["header_texts"], cpp_result["cpp_texts"])
-            ]
+            return [h + "\n" + c for h, c in zip(header_texts, cpp_texts)]
         else:
             return {
-                "header_texts": h_result["header_texts"],
-                "cpp_texts": cpp_result["cpp_texts"]
+                "header_texts": header_texts,
+                "cpp_texts": cpp_texts
             }
-
-
 
 
 # Main
 if __name__ == "__main__":
-    generator = CodeGenerator(attn_implementation="eager")
-    prompt = "Create a character class with health and mana properties."
-    outputs = generator.generate(prompt)
-    print(outputs[0])
+    generator = CodeGenerator(load_path="./checkpoint_1_3b/generator", attn_implementation="eager")
+    prompts = [
+        "Create a character class with health and mana properties.",
+        "Create an enemy class that attacks the player and can die."
+    ]
+
+    result = generator.generate(prompts, return_text=False)
+
+    for i, (h, c) in enumerate(zip(result["header_texts"], result["cpp_texts"])):
+        print(f"\n=== Sample {i+1} Header ===\n{h}")
+        print(f"=== Sample {i+1} CPP ===\n{c}")
